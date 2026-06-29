@@ -3,8 +3,8 @@ import os
 import random
 from collections import deque
 
-ROWS = 15  # количество строк сетки
-COLS = 15  # количество столбцов сетки
+ROWS = 12
+COLS = 15
 
 START = [0, 0]  # стартовый узел [row, col]
 END = [ROWS - 1, COLS - 1]  # финишный узел  [row, col]
