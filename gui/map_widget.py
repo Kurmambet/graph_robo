@@ -2,23 +2,19 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPolygonF
 from PyQt6.QtWidgets import QWidget
 
-CELL = 80  # пикселей на клетку
-MARGIN = 40  # отступ от края
-NODE_R = 14  # радиус узла
-ARROW_SIZE = 10  # размер стрелки робота
+NODE_R_FRAC = 0.18  # радиус узла = CELL * NODE_R_FRAC
+ARROW_FRAC = 0.13  # размер стрелки = CELL * ARROW_FRAC
+MARGIN_FRAC = 0.6  # отступ от края = CELL * MARGIN_FRAC
 
 
 class MapWidget(QWidget):
-    """
-    Отрисовка графа и робота.
-    Перерисовывается вызовом update() снаружи.
-    """
-
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.graph = None  # core.graph.Graph
-        self.robot = None  # core.robot.Robot
-        self.path: list = []  # текущий маршрут
+        self.graph = None
+        self.robot = None
+        self.path: list = []
+        # Разрешаем виджету растягиваться вместе с окном
+        self.setMinimumSize(200, 200)
 
     def set_data(self, graph, robot):
         self.graph = graph
@@ -30,37 +26,49 @@ class MapWidget(QWidget):
         self.update()
 
     # ------------------------------------------------------------------
+    # Вычисляем размер клетки динамически под текущий размер виджета
+
+    def _cell_size(self) -> float:
+        if self.graph is None:
+            return 60.0
+        w = self.width()
+        h = self.height()
+        cell_w = w / (self.graph.cols - 1 + 2 * MARGIN_FRAC)
+        cell_h = h / (self.graph.rows - 1 + 2 * MARGIN_FRAC)
+        return min(cell_w, cell_h)  # берём меньшее — вся карта влезает
+
+    def _px(self, row, col) -> QPointF:
+        cell = self._cell_size()
+        margin = cell * MARGIN_FRAC
+        x = margin + col * cell
+        y = margin + row * cell
+        return QPointF(x, y)
+
+    # ------------------------------------------------------------------
 
     def paintEvent(self, event):
         if self.graph is None:
             return
-
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-
         self._draw_edges(p)
         self._draw_path(p)
         self._draw_nodes(p)
         if self.robot:
             self._draw_robot(p)
-
         p.end()
 
-    # ------------------------------------------------------------------
-    # Вспомогательное: перевод координат сетки → пиксели
-
-    def _px(self, row, col) -> QPointF:
-        x = MARGIN + col * CELL
-        y = MARGIN + row * CELL
-        return QPointF(x, y)
+    def resizeEvent(self, event):
+        """При изменении размера окна — перерисовываем карту."""
+        super().resizeEvent(event)
+        self.update()
 
     # ------------------------------------------------------------------
 
     def _draw_edges(self, p: QPainter):
-        """Рисуем все рёбра рабочей сессии."""
-        pen = QPen(QColor("#aaaaaa"), 2)
+        cell = self._cell_size()
+        pen = QPen(QColor("#aaaaaa"), max(1.0, cell * 0.025))
         p.setPen(pen)
-
         drawn = set()
         for node, neighbors in self.graph.session_adjacency.items():
             for nb in neighbors:
@@ -71,21 +79,24 @@ class MapWidget(QWidget):
                 p.drawLine(self._px(*node), self._px(*nb))
 
     def _draw_path(self, p: QPainter):
-        """Выделяем маршрут толстой цветной линией."""
         if len(self.path) < 2:
             return
-
-        pen = QPen(QColor("#2196F3"), 5)
+        cell = self._cell_size()
+        pen = QPen(QColor("#2196F3"), max(2.0, cell * 0.07))
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         p.setPen(pen)
-
         for i in range(len(self.path) - 1):
             p.drawLine(self._px(*self.path[i]), self._px(*self.path[i + 1]))
 
     def _draw_nodes(self, p: QPainter):
-        """Рисуем узлы. Старт=зелёный, финиш=красный, остальные=белые."""
+        cell = self._cell_size()
+        node_r = cell * NODE_R_FRAC
+        font = QFont("Arial", max(6, int(cell * 0.12)))
+        p.setFont(font)
+
         for node in self.graph.nodes:
-            cx, cy = self._px(*node).x(), self._px(*node).y()
+            pt = self._px(*node)
+            cx, cy = pt.x(), pt.y()
 
             if node == self.graph.start:
                 color = QColor("#4CAF50")
@@ -97,52 +108,37 @@ class MapWidget(QWidget):
                 color = QColor("#ffffff")
 
             p.setBrush(QBrush(color))
-            p.setPen(QPen(QColor("#555555"), 1.5))
-            p.drawEllipse(QPointF(cx, cy), NODE_R, NODE_R)
+            p.setPen(QPen(QColor("#555555"), max(1.0, cell * 0.02)))
+            p.drawEllipse(QPointF(cx, cy), node_r, node_r)
 
-            # Координата подписью
-            font = QFont("Arial", 7)
-            p.setFont(font)
             p.setPen(QPen(QColor("#333333")))
-            p.drawText(int(cx) - 12, int(cy) + 4, f"{node[0]},{node[1]}")
+            p.drawText(
+                int(cx - node_r * 0.9), int(cy + node_r * 0.45), f"{node[0]},{node[1]}"
+            )
 
     def _draw_robot(self, p: QPainter):
-        """Рисуем стрелку робота поверх его узла."""
-        direction_angle = {
-            "north": 270,
-            "east": 0,
-            "south": 90,
-            "west": 180,
-        }
+        cell = self._cell_size()
+        node_r = cell * NODE_R_FRAC
+        arr_sz = cell * ARROW_FRAC
+
+        direction_angle = {"north": 270, "east": 0, "south": 90, "west": 180}
         angle = direction_angle.get(self.robot.direction, 0)
 
-        cx, cy = self._px(*self.robot.pos).x(), self._px(*self.robot.pos).y()
+        pt = self._px(*self.robot.pos)
+        cx, cy = pt.x(), pt.y()
 
         p.save()
         p.translate(cx, cy)
         p.rotate(angle)
 
-        # Стрелка → треугольник
         arrow = QPolygonF(
             [
-                QPointF(NODE_R + ARROW_SIZE, 0),
-                QPointF(NODE_R - 2, -6),
-                QPointF(NODE_R - 2, 6),
+                QPointF(node_r + arr_sz, 0),
+                QPointF(node_r - 2, -arr_sz * 0.6),
+                QPointF(node_r - 2, arr_sz * 0.6),
             ]
         )
         p.setBrush(QBrush(QColor("#1565C0")))
         p.setPen(QPen(QColor("#0D47A1"), 1))
         p.drawPolygon(arrow)
-
         p.restore()
-
-    # ------------------------------------------------------------------
-
-    def sizeHint(self):
-        from PyQt6.QtCore import QSize
-
-        if self.graph is None:
-            return QSize(400, 400)
-        w = MARGIN * 2 + (self.graph.cols - 1) * CELL
-        h = MARGIN * 2 + (self.graph.rows - 1) * CELL
-        return QSize(w, h)

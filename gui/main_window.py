@@ -5,7 +5,6 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -45,11 +44,8 @@ class MainWindow(QMainWindow):
 
         # Карта в прокручиваемой области
         self.map_widget = MapWidget()
-        scroll = QScrollArea()
-        scroll.setWidget(self.map_widget)
-        scroll.setWidgetResizable(False)
-        scroll.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.addWidget(scroll, stretch=1)
+
+        root.addWidget(self.map_widget, stretch=1)
 
         # Статус
         self.status_label = QLabel("Инициализация...")
