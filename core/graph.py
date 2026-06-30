@@ -39,9 +39,9 @@ class Graph:
         self._base_adjacency = {node: [] for node in self.nodes}
         for edge in data["edges"]:
             a, b = tuple(edge[0]), tuple(edge[1])
-            # граф ненаправленный
+
             self._base_adjacency[a].append(b)  # {(0,0): [(0,1), (1,0)],}
-            self._base_adjacency[b].append(a)  # в обратном направлении
+            self._base_adjacency[b].append(a)  # граф ненаправленный
 
         self.reset_session()
 

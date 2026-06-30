@@ -15,7 +15,7 @@ from core.robot import Robot, SimulationController
 from gui.map_widget import MapWidget
 from qr.scanner import scan_qr_once
 
-DEBUG_BFS = False
+DEBUG_BFS = True
 
 
 class MainWindow(QMainWindow):
@@ -70,7 +70,6 @@ class MainWindow(QMainWindow):
         self.btn_bfs_step.clicked.connect(self._on_bfs_step)
         btn_row.addWidget(self.btn_bfs_step)
 
-        # Скрываем если DEBUG_BFS выключен
         if not DEBUG_BFS:
             self.btn_bfs_step.setVisible(False)
 
@@ -120,7 +119,7 @@ class MainWindow(QMainWindow):
 
     def _on_scan_qr(self):
         """Сканируем QR, применяем команду, перестраиваем маршрут, делаем шаг."""
-        self._set_status("Открываю камеру... наведите QR-код")
+        self._set_status("наведите QR-код")
         qr_data = scan_qr_once()
 
         if qr_data is None:
