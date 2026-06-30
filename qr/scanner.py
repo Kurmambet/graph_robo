@@ -31,7 +31,7 @@ def scan_qr_once(timeout_seconds: int = 15) -> Optional[dict]:
 
         data, _, _ = detector.detectAndDecode(frame)
 
-        cv2.imshow("QR Scanner — нажмите ESC для отмены", frame)
+        cv2.imshow("QR Scanner - нажмите ESC для отмены", frame)
         key = cv2.waitKey(1) & 0xFF
         if key == 27:  # ESC
             break

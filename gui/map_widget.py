@@ -12,6 +12,7 @@ class MapWidget(QWidget):
         super().__init__(parent)
         self.graph = None
         self.robot = None
+        self.bfs_state = None
         self.path: list = []
         # Разрешаем виджету растягиваться вместе с окном
         self.setMinimumSize(200, 200)
@@ -25,9 +26,11 @@ class MapWidget(QWidget):
         self.path = path
         self.update()
 
-    # ------------------------------------------------------------------
-    # Вычисляем размер клетки динамически под текущий размер виджета
+    def set_bfs_state(self, state):
+        self.bfs_state = state
+        self.update()
 
+    # Вычисляем размер клетки динамически под текущий размер виджета
     def _cell_size(self) -> float:
         if self.graph is None:
             return 60.0
@@ -35,7 +38,7 @@ class MapWidget(QWidget):
         h = self.height()
         cell_w = w / (self.graph.cols - 1 + 2 * MARGIN_FRAC)
         cell_h = h / (self.graph.rows - 1 + 2 * MARGIN_FRAC)
-        return min(cell_w, cell_h)  # берём меньшее — вся карта влезает
+        return min(cell_w, cell_h)  # берём меньшее - вся карта влезает
 
     def _px(self, row, col) -> QPointF:
         cell = self._cell_size()
@@ -59,7 +62,7 @@ class MapWidget(QWidget):
         p.end()
 
     def resizeEvent(self, event):
-        """При изменении размера окна — перерисовываем карту."""
+        """При изменении размера окна - перерисовываем карту."""
         super().resizeEvent(event)
         self.update()
 
@@ -98,10 +101,22 @@ class MapWidget(QWidget):
             pt = self._px(*node)
             cx, cy = pt.x(), pt.y()
 
+            s = self.bfs_state
+
             if node == self.graph.start:
                 color = QColor("#4CAF50")
             elif node == self.graph.end:
                 color = QColor("#F44336")
+            elif s is not None and s.phase in ("done",) and node in s.path:
+                color = QColor("#2196F3")  # финальный маршрут - синий
+            elif s is not None and s.phase == "reconstruct" and node in s.path:
+                color = QColor("#FF9800")  # восстановление пути - оранжевый
+            elif s is not None and node == s.current:
+                color = QColor("#9C27B0")  # текущий обрабатываемый - фиолетовый
+            elif s is not None and node in s.queue:
+                color = QColor("#FFEB3B")  # в очереди (фронт волны) - жёлтый
+            elif s is not None and node in s.visited:
+                color = QColor("#B3E5FC")  # уже посещён - голубой
             elif self.robot and node == self.robot.pos:
                 color = QColor("#FF9800")
             else:

@@ -10,10 +10,12 @@ from PyQt6.QtWidgets import (
 )
 
 from core.graph import Graph
-from core.pathfinder import bfs
+from core.pathfinder import bfs, bfs_step_by_step
 from core.robot import Robot, SimulationController
 from gui.map_widget import MapWidget
 from qr.scanner import scan_qr_once
+
+DEBUG_BFS = False
 
 
 class MainWindow(QMainWindow):
@@ -27,6 +29,9 @@ class MainWindow(QMainWindow):
 
         self.robot: Robot | None = None
         self.current_path: list = []
+
+        self._bfs_gen = None
+        self._bfs_state = None
 
         self._build_ui()
         self._start_session()
@@ -55,9 +60,19 @@ class MainWindow(QMainWindow):
 
         # Кнопки
         btn_row = QHBoxLayout()
-        self.btn_continue = QPushButton("▶  Продолжить (без изменений)")
-        self.btn_scan = QPushButton("📷  Сканировать QR")
-        self.btn_restart = QPushButton("↺  Рестарт")
+        self.btn_continue = QPushButton("Продолжить (без изменений)")
+        self.btn_scan = QPushButton("Сканировать QR")
+        self.btn_restart = QPushButton("Рестарт")
+        self.btn_bfs_step = QPushButton("Шаг BFS")
+
+        self.btn_bfs_step.setMinimumHeight(36)
+        self.btn_bfs_step.setEnabled(False)
+        self.btn_bfs_step.clicked.connect(self._on_bfs_step)
+        btn_row.addWidget(self.btn_bfs_step)
+
+        # Скрываем если DEBUG_BFS выключен
+        if not DEBUG_BFS:
+            self.btn_bfs_step.setVisible(False)
 
         self.btn_continue.setEnabled(False)
         self.btn_scan.setEnabled(False)
@@ -88,15 +103,19 @@ class MainWindow(QMainWindow):
         if not ok:
             return
 
-        self._set_waiting(True)
         self._refresh()
+        if DEBUG_BFS:
+            self._start_bfs_debug()
+            self._set_waiting(False)
+        else:
+            self._set_waiting(True)
 
     # ------------------------------------------------------------------
     # Логика шага
     # ------------------------------------------------------------------
 
     def _on_continue(self):
-        """Продолжить без изменений — просто делаем шаг."""
+        """Продолжить без изменений - просто делаем шаг."""
         self._do_step()
 
     def _on_scan_qr(self):
@@ -128,7 +147,7 @@ class MainWindow(QMainWindow):
         self._refresh()
 
         if self.robot.is_at_goal(self.graph.end):
-            self._set_status("🎉 Робот достиг финиша!")
+            self._set_status("Робот достиг финиша!")
             self._set_waiting(False)
             QMessageBox.information(self, "Финиш!", "Робот достиг конечной точки.")
             return
@@ -145,7 +164,7 @@ class MainWindow(QMainWindow):
         path = bfs(self.graph.session_adjacency, self.robot.pos, self.graph.end)
 
         if path is None:
-            self._set_status("❌ Путь до финиша не существует!")
+            self._set_status("Путь до финиша не существует!")
             self.current_path = []
             self.map_widget.set_path([])
             self._set_waiting(False)
@@ -158,6 +177,63 @@ class MainWindow(QMainWindow):
         self.robot.set_path(path)
         self.map_widget.set_path(path)
         return True
+
+    # ------------------------------------------------------------------
+    # BFS DEBUG
+    # ------------------------------------------------------------------
+
+    def _start_bfs_debug(self):
+        """Запустить пошаговый BFS от текущей позиции."""
+        self._bfs_gen = bfs_step_by_step(
+            self.graph.session_adjacency, self.robot.pos, self.graph.end
+        )
+        self.btn_bfs_step.setEnabled(True)
+        self._on_bfs_step()  # показать начальное состояние сразу
+
+    def _on_bfs_step(self):
+        """Один шаг генератора BFS."""
+        if self._bfs_gen is None:
+            return
+        try:
+            state = next(self._bfs_gen)
+            self._bfs_state = state
+            self.map_widget.set_bfs_state(state)
+            self._print_bfs_console(state)
+
+            if state.phase in ("done", "no_path"):
+                self.btn_bfs_step.setEnabled(False)
+                if state.phase == "done":
+                    self._set_status(f"BFS завершён. Путь: {len(state.path) - 1} хопов")
+                    # передаём найденный путь роботу
+                    self.current_path = state.path
+                    self.robot.set_path(state.path)
+                    self.map_widget.set_path(state.path)
+                else:
+                    self._set_status("BFS: путь не найден")
+        except StopIteration:
+            self.btn_bfs_step.setEnabled(False)
+
+    def _print_bfs_console(self, state):
+        """Вывод текущего состояния BFS в консоль."""
+        import os
+
+        os.system("cls" if os.name == "nt" else "clear")
+
+        q_list = list(state.queue)
+        cf_items = [(k, v) for k, v in state.came_from.items() if v is not None]
+
+        print("-" * 48)
+        print(f"  BFS DEBUG  |  фаза: {state.phase.upper()}")
+        print("-" * 48)
+        print(f"  ТЕКУЩИЙ    : {state.current}")
+        print(f"  ОЧЕРЕДЬ    : {q_list}")
+        print(f"  ПОСЕЩЕНО   : {sorted(state.visited)}")
+        print(f"  ПУТЬ       : {state.path if state.path else '-'}")
+        print()
+        print("  came_from:")
+        for node, parent in sorted(cf_items):
+            print(f"    {node} <- {parent}")
+        print("-" * 48)
 
     # ------------------------------------------------------------------
     # Вспомогательное

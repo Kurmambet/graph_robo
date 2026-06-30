@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import QApplication
 
 from gui.main_window import MainWindow
 
-MAP_PATH = "maps/generated.json"
+MAP_PATH = "maps/default.json"
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
