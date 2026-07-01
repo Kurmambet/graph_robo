@@ -3,8 +3,8 @@ import os
 import random
 from collections import deque
 
-ROWS = 12
-COLS = 15
+ROWS = 5
+COLS = 3
 
 START = [0, 0]  # стартовый узел [row, col]
 END = [ROWS - 1, COLS - 1]  # финишный узел  [row, col]

@@ -15,12 +15,13 @@ from core.robot import Robot, SimulationController
 from gui.map_widget import MapWidget
 from qr.scanner import scan_qr_once
 
-DEBUG_BFS = True
+# DEBUG_BFS = True
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, map_path: str):
+    def __init__(self, map_path: str, debug_bfs: bool = False):
         super().__init__()
+        self.debug_bfs = debug_bfs
         self.setWindowTitle("Robot Graph Simulation")
         self.map_path = map_path
 
@@ -70,7 +71,7 @@ class MainWindow(QMainWindow):
         self.btn_bfs_step.clicked.connect(self._on_bfs_step)
         btn_row.addWidget(self.btn_bfs_step)
 
-        if not DEBUG_BFS:
+        if not self.debug_bfs:
             self.btn_bfs_step.setVisible(False)
 
         self.btn_continue.setEnabled(False)
@@ -103,7 +104,7 @@ class MainWindow(QMainWindow):
             return
 
         self._refresh()
-        if DEBUG_BFS:
+        if self.debug_bfs:
             self._start_bfs_debug()
             self._set_waiting(False)
         else:
